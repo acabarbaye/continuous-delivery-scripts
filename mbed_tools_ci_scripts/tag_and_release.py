@@ -10,7 +10,7 @@ import datetime
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 from mbed_tools_ci_scripts.license_files import add_licence_header
 from mbed_tools_ci_scripts.generate_docs import generate_documentation
@@ -18,7 +18,7 @@ from mbed_tools_ci_scripts.generate_news import version_project
 from mbed_tools_ci_scripts.utils.configuration import configuration, ConfigurationVariable
 from mbed_tools_ci_scripts.utils.definitions import CommitType
 from mbed_tools_ci_scripts.utils.filesystem_helpers import cd
-from mbed_tools_ci_scripts.utils.git_helpers import ProjectTempClone, GitWrapper
+from mbed_tools_ci_scripts.utils.git_helpers import LocalProjectRepository, GitWrapper
 from mbed_tools_ci_scripts.utils.logging import log_exception, set_log_level
 from mbed_tools_ci_scripts.report_third_party_ip import (
     get_current_spdx_project,
@@ -34,14 +34,13 @@ SPDX_REPORTS_DIRECTORY = "licensing"
 logger = logging.getLogger(__name__)
 
 
-def tag_and_release(mode: CommitType, current_branch: Optional[str] = None) -> None:
+def tag_and_release(mode: CommitType) -> None:
     """Tags and releases.
 
     Updates repository with changes and releases package to PyPI for general availability.
 
     Args:
         mode: release mode
-        current_branch: current branch in case the current branch cannot easily
         be determined (e.g. on CI)
 
     """
@@ -57,7 +56,7 @@ def tag_and_release(mode: CommitType, current_branch: Optional[str] = None) -> N
     # Adding the licensing summaries in /docs after folder has been cleared and regenerated.
     spdx_project = _update_licensing_summary()
     add_licence_header(0)
-    _update_repository(mode, is_new_version, version, current_branch)
+    _update_repository(mode, is_new_version, version)
     if is_new_version:
         _generate_spdx_reports(spdx_project)
         _release_to_pypi()
@@ -88,9 +87,9 @@ def _update_licensing_summary() -> SpdxProject:
     return project
 
 
-def _update_repository(mode: CommitType, is_new_version: bool, version: str, current_branch: Optional[str]) -> None:
+def _update_repository(mode: CommitType, is_new_version: bool, version: str) -> None:
     """Update repository with changes that happened."""
-    with ProjectTempClone(desired_branch_name=current_branch) as git:
+    with LocalProjectRepository() as git:
         git.configure_for_github()
         time_str = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         commit_message = f"🚀 releasing version {version} @ {time_str}" if is_new_version else "📰 Automatic changes ⚙"
@@ -197,12 +196,11 @@ def main() -> None:
     parser.add_argument(
         "-t", "--release-type", help="type of release to perform", required=True, type=str, choices=CommitType.choices()
     )
-    parser.add_argument("-b", "--current-branch", help="Name of the current branch", nargs="?")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity, by default errors are reported.")
     args = parser.parse_args()
     set_log_level(args.verbose)
     try:
-        tag_and_release(CommitType.parse(args.release_type), args.current_branch)
+        tag_and_release(CommitType.parse(args.release_type))
     except Exception as e:
         log_exception(logger, e)
         sys.exit(1)

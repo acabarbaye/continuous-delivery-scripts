@@ -4,7 +4,9 @@ parameters:
   currentBranch: ''
 
 steps:
-  - bash: tag-and-release -b ${{ parameters.currentBranch }} --release-type=${{ parameters.releaseType }} -vv
+  - script: |
+      git switch -c ${{ parameters.currentBranch }} --track origin/${{ parameters.currentBranch }}
+      tag-and-release --release-type=${{ parameters.releaseType }} -vv
     displayName: ${{ parameters.message }}
     env:
       GIT_TOKEN: $(GIT_TOKEN)
